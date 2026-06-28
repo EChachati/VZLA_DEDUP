@@ -70,7 +70,7 @@ def _get_adapter(source: SourceConfig) -> Any:
       html_static → HtmlAdapter (requests + BeautifulSoup, devuelve texto limpio)
       manual_file / text → local_file (lectura local)
       pdf         → PdfAdapter (pdfplumber, texto por página)
-      rss         → fetch_url (el RSS es HTML/XML estático)
+      rss         → RssAdapter (extrae items del feed RSS/Atom)
       webapp_js   → PlaywrightAdapter (browser headless, paginas con JS)
 
     Tipos sin adapter registrado devuelven None y la fuente se omite.
@@ -98,8 +98,8 @@ def _get_adapter(source: SourceConfig) -> Any:
         return HtmlAdapter.from_source_config(source)
 
     if stype == "rss":
-        from scrapers.adapters.http_client import fetch_url
-        return _StaticHttpAdapter(source_key=source.id, fetch_fn=fetch_url)
+        from scrapers.adapters.rss_adapter import RssAdapter
+        return RssAdapter.from_source_config(source)
 
     if stype in ("manual_file", "text"):
         from scrapers.adapters.local_file import read_local_file
@@ -148,34 +148,6 @@ def _get_parser(source: SourceConfig) -> Any:
 # ---------------------------------------------------------------------------
 # Adapters ligeros para fuentes no-API
 # ---------------------------------------------------------------------------
-
-class _StaticHttpAdapter:
-    """Wrapper fino sobre fetch_url para fuentes html_static/rss."""
-
-    def __init__(self, source_key: str, fetch_fn: Any) -> None:
-        self.source_key = source_key
-        self._fetch = fetch_fn
-
-    def fetch(self, url: str, **_: Any) -> RawContent:
-        text, content_type = self._fetch(url)
-        return RawContent(
-            source_key=self.source_key,
-            source_url=url,
-            fetched_at=now_utc(),
-            http_status=200,
-            content_type=content_type,
-            content_hash=sha256_hex(text.encode("utf-8")),
-            raw_content=text,
-            page=None,
-            total_pages=None,
-            offset=None,
-            limit=None,
-            records_in_page=None,
-        )
-
-    def fetch_all(self, url: str, **kwargs: Any):  # type: ignore[return]
-        yield self.fetch(url)
-
 
 class _LocalFileAdapter:
     """Wrapper fino sobre read_local_file para fuentes manual_file."""
